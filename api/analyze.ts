@@ -69,6 +69,49 @@ const responseSchema = {
   ],
 }
 
+function safeField(
+  field: any,
+  allowedValues?: string[],
+  expectedType?: 'string' | 'number',
+) {
+  const value = field?.value ?? null
+  const confidence = Number(field?.confidence)
+
+  const validType =
+    value === null ||
+    (expectedType
+      ? typeof value === expectedType
+      : typeof value === 'string' || typeof value === 'number')
+
+  const validValue =
+    validType &&
+    (!allowedValues ||
+      value === null ||
+      allowedValues.includes(String(value)))
+
+  return {
+    value: validValue ? value : null,
+    confidence: Number.isFinite(confidence)
+      ? Math.max(0, Math.min(1, confidence))
+      : 0,
+  }
+}
+
+function isValidDate(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -150,37 +193,37 @@ Food, Groceries, Utilities, Transport, Shopping, Healthcare, Education, Other.
 IMPORTANT CATEGORY CLASSIFICATION RULES:
 
 - Education:
-  University fees, college fees, school fees, tuition fees, examination fees,
-  admission fees, academic fees, hostel fees charged by an educational institution,
-  and other education-related payments.
+University fees, college fees, school fees, tuition fees, examination fees,
+admission fees, academic fees, hostel fees charged by an educational institution,
+and other education-related payments.
 
 - Utilities:
-  Mobile phone recharges, prepaid and postpaid mobile bills,
-  internet bills, broadband bills, Wi-Fi bills, electricity bills,
-  water bills, gas bills, and other household or communication services.
+Mobile phone recharges, prepaid and postpaid mobile bills,
+internet bills, broadband bills, Wi-Fi bills, electricity bills,
+water bills, gas bills, and other household or communication services.
 
 - Food:
-  Restaurant bills, cafe bills, food delivery, takeaway orders,
-  and meals purchased from food outlets.
+Restaurant bills, cafe bills, food delivery, takeaway orders,
+and meals purchased from food outlets.
 
 - Groceries:
-  Supermarket bills, grocery stores, vegetables, fruits,
-  household food supplies, and daily provisions.
+Supermarket bills, grocery stores, vegetables, fruits,
+household food supplies, and daily provisions.
 
 - Transport:
-  Fuel bills, petrol pumps, diesel purchases, taxi rides,
-  bus tickets, train tickets, and other transportation expenses.
+Fuel bills, petrol pumps, diesel purchases, taxi rides,
+bus tickets, train tickets, and other transportation expenses.
 
 - Shopping:
-  Clothing, footwear, electronics, accessories,
-  and general retail purchases that do not fit another category.
+Clothing, footwear, electronics, accessories,
+and general retail purchases that do not fit another category.
 
 - Healthcare:
-  Hospital bills, doctor consultations, medical tests,
-  pharmacy purchases, and healthcare services.
+Hospital bills, doctor consultations, medical tests,
+pharmacy purchases, and healthcare services.
 
 - Other:
-  Bills that genuinely do not fit any of the categories above.
+Bills that genuinely do not fit any of the categories above.
 
 CATEGORY DECISION EXAMPLES:
 
@@ -241,12 +284,9 @@ Return the result using the required JSON schema.
       throw new Error('Gemini returned an empty response.')
     }
 
-    console.log('Gemini response received successfully.')
-
     const result = JSON.parse(responseText)
 
     if (typeof result.isBill !== 'boolean') {
-      console.error('Unexpected Gemini response structure.')
       throw new Error('Invalid AI response structure.')
     }
 
@@ -259,41 +299,31 @@ Return the result using the required JSON schema.
       })
     }
 
-    function safeField(
-      field: any,
-      allowedValues?: string[],
-      expectedType?: 'string' | 'number',
+    const merchant = safeField(result.merchant, undefined, 'string')
+    const date = safeField(result.date, undefined, 'string')
+    const total = safeField(result.total, undefined, 'number')
+    const category = safeField(result.category, categories, 'string')
+
+    if (!isValidDate(date.value)) {
+      date.value = null
+      date.confidence = 0
+    }
+
+    if (
+      total.value !== null &&
+      (!Number.isFinite(total.value) || total.value < 0)
     ) {
-      const value = field?.value ?? null
-      const confidence = Number(field?.confidence)
-
-      const validType =
-        value === null ||
-        (expectedType
-          ? typeof value === expectedType
-          : typeof value === 'string' || typeof value === 'number')
-
-      const validValue =
-        validType &&
-        (!allowedValues ||
-          value === null ||
-          allowedValues.includes(String(value)))
-
-      return {
-        value: validValue ? value : null,
-        confidence: Number.isFinite(confidence)
-          ? Math.max(0, Math.min(1, confidence))
-          : 0,
-      }
+      total.value = null
+      total.confidence = 0
     }
 
     return res.status(200).json({
       isBill: true,
       rejectionReason: null,
-      merchant: safeField(result.merchant, undefined, 'string'),
-      date: safeField(result.date, undefined, 'string'),
-      total: safeField(result.total, undefined, 'number'),
-      category: safeField(result.category, categories, 'string'),
+      merchant,
+      date,
+      total,
+      category,
     })
   } catch (error) {
     console.error('Bill analysis error:', error)
