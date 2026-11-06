@@ -148,3 +148,11 @@ Refer to `docs/evaluation-results.md` for the testing details.
 ## Project Goal
 
 To make expense tracking easier by using AI to digitise and organise everyday bills and receipts.
+
+## Personal Reflection
+
+I enjoyed building BillSnap because it gave me an opportunity to work with AI integration and develop a practical application that solves a real-world problem. I particularly liked integrating Google's Gemini API to extract expense information from receipt images.
+
+If I could improve something, I would focus on making the extraction more consistent across different receipt formats and mobile devices. I would also like to add duplicate detection, monthly expense analytics, and cloud-based data synchronization.
+
+Overall, I am happy with what I have built. This project helped me understand how AI can be integrated into a useful real-world application.
